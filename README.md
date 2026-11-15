@@ -1,5 +1,7 @@
 # 框选译 · PDF / 网页划词翻译（Chrome 扩展 v1.0.0）
 
+![译文卡片](docs/screenshot.png)
+
 框选即译的 Chrome 扩展。三种用法：
 
 | 场景 | 操作 | 效果 |
