@@ -13,7 +13,8 @@
     minLength: 2,
     maxLength: 3000,
     theme: 'dark',
-    fontSize: 'normal'
+    fontSize: 'normal',
+    cardHeight: 260   // 译文卡片最大高度（物理像素，不随页面缩放变化）
   };
   var settings = Object.assign({}, DEFAULTS);
   var host = null;
@@ -34,7 +35,7 @@
 
   var CSS = [
     ':host{all:initial}',
-    '.xk-card{--xk-fs:15px;--xk-fs-src:12px;position:absolute;box-sizing:border-box;max-width:420px;min-width:260px;max-height:60vh;overflow:hidden;display:flex;flex-direction:column;border-radius:12px;box-shadow:0 12px 36px rgba(0,0,0,.35),0 0 0 1px rgba(0,0,0,.08);font:14px/1.55 -apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif;pointer-events:auto;opacity:0;transition:opacity .12s ease}',
+    '.xk-card{--xk-fs:15px;--xk-fs-src:12px;position:absolute;box-sizing:border-box;max-width:420px;min-width:260px;overflow:hidden;display:flex;flex-direction:column;border-radius:12px;box-shadow:0 12px 36px rgba(0,0,0,.35),0 0 0 1px rgba(0,0,0,.08);font:14px/1.55 -apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif;pointer-events:auto;opacity:0;transition:opacity .12s ease}',
     '.xk-card.xk-in{opacity:1}',
     '.xk-dark{background:#1e2430;color:#e8edf5;border:1px solid #333d4f}',
     '.xk-light{background:#ffffff;color:#1a2230;border:1px solid #dfe4ec}',
@@ -45,6 +46,10 @@
     '.xk-x:hover{opacity:1}',
     '.xk-pin{margin-left:auto;background:rgba(128,145,170,.12);border:1px solid rgba(128,145,170,.3);color:inherit;font-size:11px;line-height:1.6;padding:1px 7px;border-radius:6px;cursor:pointer;white-space:nowrap}',
     '.xk-pin.xk-on{background:rgba(37,99,235,.35);border-color:#5b8ef7;color:#dce8ff}',
+    '.xk-grip{position:absolute;left:0;right:0;height:8px;cursor:ns-resize;z-index:5}',
+    '.xk-grip:hover{background:rgba(122,162,247,.35)}',
+    '.xk-grip-top{top:0;border-radius:12px 12px 0 0}',
+    '.xk-grip-bottom{bottom:0;border-radius:0 0 12px 12px}',
     '.xk-body{padding:10px 12px 6px;overflow:auto;flex:1 1 auto}',
     '.xk-card[data-size="small"]{--xk-fs:13px;--xk-fs-src:11px}',
     '.xk-card[data-size="large"]{--xk-fs:18px;--xk-fs-src:13px}',
@@ -83,6 +88,15 @@
       if (changes.fontSize && card) {
         card.setAttribute('data-size', settings.fontSize || 'normal');
         position(lastAnchor, false);
+      }
+      if (changes.cardHeight && card) {
+        // 只是同步高度，别移动卡片（拖完手柄保存时会触发这里）
+        card.style.maxHeight = (settings.cardHeight || 260) + 'px';
+        var c2 = card.getBoundingClientRect();
+        if (c2.width) {
+          var p2 = clampPos(c2.left, c2.top, c2.width, c2.height, window.innerWidth, window.innerHeight);
+          setPos(p2.left, p2.top);
+        }
       }
     });
   } catch (e) {}
@@ -125,6 +139,7 @@
     if (card && card.parentNode) card.parentNode.removeChild(card);
     card = makeEl('div', 'xk-card xk-' + (settings.theme === 'light' ? 'light' : 'dark'));
     card.setAttribute('data-size', settings.fontSize || 'normal');
+    card.style.maxHeight = (settings.cardHeight || 260) + 'px';
     if (pinned && pinnedPos) {
       card.style.left = pinnedPos.left + 'px';
       card.style.top = pinnedPos.top + 'px';
@@ -299,7 +314,56 @@
     head.appendChild(x);
     card.appendChild(head);
     head.addEventListener('mousedown', startDrag);
+    addGrips();
     return head;
+  }
+
+  // 上下两条手柄：拖动改卡片最大高度（记住到设置里，所有页面共用）
+  function addGrips() {
+    if (!card) return;
+    ['top', 'bottom'].forEach(function (pos) {
+      var g = makeEl('div', 'xk-grip xk-grip-' + pos);
+      g.title = '拖动调整译文高度';
+      g.addEventListener('mousedown', function (e) { startResize(e, pos === 'top'); });
+      card.appendChild(g);
+    });
+  }
+
+  function startResize(e, fromTop) {
+    if (e.button !== 0 || !card) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var startY = e.clientY;
+    var z = pageZoom || 1;
+    // 卡片按 1/缩放 反向缩放，所以「物理高度」= 视觉高度 × 缩放，也等于卡片内部 px
+    var startH = card.getBoundingClientRect().height * z;
+    var maxH = Math.round(window.innerHeight * z * 0.9);
+
+    function move(ev) {
+      var dy = (ev.clientY - startY) * z;
+      var next = fromTop ? startH - dy : startH + dy;
+      next = Math.max(140, Math.min(maxH, Math.round(next)));
+      card.style.maxHeight = next + 'px';
+      // 只是改高度：保持卡片当前位置，只保证还抓得到（不能重新贴回选区，否则一拖就跳）
+      var cur = card.getBoundingClientRect();
+      if (cur.width) {
+        var p = clampPos(cur.left, cur.top, cur.width, cur.height, window.innerWidth, window.innerHeight);
+        setPos(p.left, p.top);
+      }
+    }
+
+    function up() {
+      document.removeEventListener('mousemove', move, true);
+      document.removeEventListener('mouseup', up, true);
+      var h = parseInt(card.style.maxHeight, 10);
+      if (h && h !== settings.cardHeight) {
+        settings.cardHeight = h;
+        try { chrome.storage.sync.set({ cardHeight: h }); } catch (e2) {}
+      }
+    }
+
+    document.addEventListener('mousemove', move, true);
+    document.addEventListener('mouseup', up, true);
   }
 
   function addFoot(original, result) {
