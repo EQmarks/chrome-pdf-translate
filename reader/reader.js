@@ -30,6 +30,7 @@ var current = 1;
 // —— 缩放中心：以「当前屏幕中心显示的内容」为锚点 ——
 var centerAnchor = null;   // 屏幕中心对应的内容坐标（CSS px）
 var pendingAnchor = null;  // 按钮/快捷键触发缩放前抓的锚点
+var pendingFit = false;    // 点了「适应宽度」：等缩放回 100% 后再铺满
 var zoomGuard = 0;         // 缩放后短暂忽略 scroll 事件，避免锚点被 Chrome 的自动滚动覆盖
 
 function currentCenter() {
@@ -96,6 +97,11 @@ async function trackBrowserZoom() {
       var anchor = pendingAnchor || centerAnchor;
       pendingAnchor = null;
       zoomGuard = Date.now() + 600;   // 这段时间内 Chrome 的自动滚动不要覆盖锚点
+      if (pendingFit) {
+        pendingFit = false;
+        fitWidthNow();
+        return;
+      }
       if (doc) rebuildCentered(anchor);
     });
   } catch (e) {}
@@ -390,13 +396,32 @@ async function renderPage(v) {
   v.rendering = false;
 }
 
-function fitWidth() {
+// 真正铺满（浏览器缩放已在 100%）
+function fitWidthNow() {
   if (!doc || !views.length) return;
   var vp = views[0].page.getViewport({ scale: 1 });
   scale = availWidth() / vp.width;
   fitMode = true;
   updateZoomLabel();
   rebuildHoldView();
+}
+
+// 「适应宽度」：先把浏览器缩放回滚到 100%（否则会以 200% 的视野铺满，看起来没还原），
+// 等缩放生效后再按 100% 的视口铺满
+function fitWidth() {
+  if (!doc || !views.length) return;
+  if (tabId != null && Math.abs(browserZoom - 1) > 0.001) {
+    pendingFit = true;
+    pendingAnchor = null;
+    try {
+      chrome.tabs.setZoom(tabId, 1);
+    } catch (e) {
+      pendingFit = false;
+      fitWidthNow();
+    }
+    return;
+  }
+  fitWidthNow();
 }
 
 function gotoPage(n) {
