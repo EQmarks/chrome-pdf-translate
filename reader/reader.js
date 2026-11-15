@@ -139,6 +139,15 @@ async function openUrl(url) {
     var res = await fetch(url, { credentials: 'include', cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     var buf = await res.arrayBuffer();
+    // 用 %PDF 魔数判断：网页/登录页/下载页都不是 PDF
+    var head = new Uint8Array(buf.slice(0, 5));
+    var isPdf = head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46;
+    if (!isPdf) {
+      var ctype = (res.headers.get('content-type') || '').split(';')[0];
+      setStatus('这个链接不是 PDF 文件' + (ctype ? '（服务器返回 ' + ctype + '）' : '') + '。可以点右上角「打开文件」选本地 PDF，或把 PDF 直接拖进本页面。');
+      $('empty').hidden = false;
+      return;
+    }
     var name = decodeURIComponent((url.split('#')[0].split('?')[0].split('/').pop() || 'document.pdf'));
     await openBytes(buf, name);
   } catch (err) {
@@ -177,6 +186,9 @@ async function openBytes(buf, name) {
       cMapUrl: chrome.runtime.getURL('reader/pdfjs/cmaps/'),
       cMapPacked: true,
       standardFontDataUrl: chrome.runtime.getURL('reader/pdfjs/standard_fonts/'),
+      // 标准 14 字体改用 pdf.js 自带的等宽度字体：系统字体（serif/arial）与 PDF
+      // 字宽不一致，会让文本层被 scaleX 压扁，框选位置随机偏一个字符
+      useSystemFonts: false,
       isEvalSupported: false
     });
     doc = await task.promise;
@@ -260,6 +272,38 @@ function onIntersect(entries) {
   }
 }
 
+// pdf.js 建文本层时可能改用通用字体（serif），而画布画的是 PDF 内嵌字体。
+// 两者字宽差 10% 左右，被 scaleX 压扁后，框选位置就会随机偏一个字符。
+// 做法：文本层渲染完后，把每个 span 换成内嵌字体，并按目标宽度重算 scaleX。
+function alignTextLayer(page, tc, container) {
+  try {
+    var spans = container.querySelectorAll('span');
+    var items = [];
+    var all = (tc && tc.items) || [];
+    for (var i = 0; i < all.length; i++) {
+      if (all[i] && typeof all[i].str === 'string' && all[i].str.length) items.push(all[i]);
+    }
+    if (!spans.length || spans.length !== items.length) return;
+    for (var k = 0; k < spans.length; k++) {
+      var span = spans[k];
+      var item = items[k];
+      if (!item || !item.fontName) continue;
+      var fam = null;
+      try {
+        var fo = page.commonObjs.get(item.fontName);
+        if (fo && fo.loadedName) fam = '"' + fo.loadedName + '", ' + (fo.fallbackName || 'serif');
+      } catch (e) {}
+      if (!fam) continue;
+      var target = span.getBoundingClientRect().width;
+      if (!target) continue;
+      span.style.fontFamily = fam;
+      span.style.transform = 'none';
+      var measured = span.getBoundingClientRect().width;
+      if (measured > 0) span.style.transform = 'scaleX(' + (target / measured).toFixed(6) + ')';
+    }
+  } catch (e) {}
+}
+
 async function renderPage(v) {
   if (v.rendered || v.rendering) return;
   v.rendering = true;
@@ -277,12 +321,17 @@ async function renderPage(v) {
       viewport: vp,
       transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null
     }).promise;
+    // 等内嵌字体真正加载完再建文本层：否则文本层会退回系统 serif，
+    // 字宽和画布上的字形不一致，框选会随机偏一个字符
+    try { await document.fonts.ready; } catch (e) {}
     var tc = await v.page.getTextContent();
+
     v.textDiv.style.width = Math.floor(vp.width) + 'px';
     v.textDiv.style.height = Math.floor(vp.height) + 'px';
     v.textDiv.style.setProperty('--scale-factor', String(vp.scale));
     var layer = new pdfjsLib.TextLayer({ textContentSource: tc, container: v.textDiv, viewport: vp });
     await layer.render();
+    alignTextLayer(v.page, tc, v.textDiv);
     v.rendered = true;
   } catch (err) {
     console.warn('page render failed', v.num, err);

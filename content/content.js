@@ -24,6 +24,8 @@
   var hideTimer = null;
   var pinned = false;      // 固定模式：卡片停在原地，不跟随选区
   var pinnedPos = null;    // 固定时的坐标
+  var holdPos = false;     // 取消固定后：保持当前位置，直到下一次新的框选
+  var curPos = null;       // 卡片当前实际坐标（卡片会重建，必须单独记）
   var pageZoom = 1;        // 当前标签页的 Chrome 页面缩放
   var lastAnchor = null;   // 最近一次译文的锚点，缩放变化后用来重新定位
   // 内置 PDF 阅读器页面：<html data-xk-reader="1">
@@ -131,6 +133,24 @@
     return card;
   }
 
+  // 拖动/固定时的位置约束：不要求整张卡都在屏内，只要左边留 80px、
+  // 标题栏留 40px 能抓回来就行（原来必须整张卡完整可见，拖起来像被吸住）
+  function clampPos(left, top, w, h, vw, vh) {
+    var keepX = Math.min(80, w);
+    var keepY = Math.min(40, h);
+    var l = Math.min(Math.max(-(w - keepX), left), vw - keepX);
+    var t = Math.min(Math.max(0, top), vh - keepY);
+    return { left: l, top: t };
+  }
+
+  function setPos(left, top) {
+    curPos = { left: Math.round(left), top: Math.round(top) };
+    if (card) {
+      card.style.left = curPos.left + 'px';
+      card.style.top = curPos.top + 'px';
+    }
+  }
+
   function applyCardZoom() {
     if (!card) return;
     var z = pageZoom || 1;
@@ -159,13 +179,22 @@
     if (pinned && pinnedPos) {
       // 固定模式：只保证不跑出屏幕，不跟随选区
       // 固定就固定：只把左边拉回屏内、保证标题栏可见，不因内容变高而上下跳
-      var pl = Math.min(Math.max(margin, pinnedPos.left), Math.max(margin, vw - w - margin));
-      var pt = Math.max(margin, Math.min(pinnedPos.top, vh - 60));
-      pinnedPos = { left: pl, top: pt };
-      card.style.left = pl + 'px';
-      card.style.top = pt + 'px';
+      var fixed = clampPos(pinnedPos.left, pinnedPos.top, w, h, vw, vh);
+      pinnedPos = { left: Math.round(fixed.left), top: Math.round(fixed.top) };
+      card.style.left = pinnedPos.left + 'px';
+      card.style.top = pinnedPos.top + 'px';
       if (asNew) requestAnimationFrame(function () { if (card) card.classList.add('xk-in'); });
       return;
+    }
+    if (!pinned && holdPos) {
+      var cur = card.getBoundingClientRect();
+      if (cur.width) {
+        var keep = clampPos(cur.left, cur.top, w, h, vw, vh);
+        card.style.left = Math.round(keep.left) + 'px';
+        card.style.top = Math.round(keep.top) + 'px';
+        if (asNew) requestAnimationFrame(function () { if (card) card.classList.add('xk-in'); });
+        return;
+      }
     }
     var anchor = rect || lastAnchor || { left: margin, top: 70, bottom: 70 };
     var left = Math.round(anchor.left);
@@ -196,15 +225,18 @@
       e.stopPropagation();
       pinned = !pinned;
       if (pinned) {
+        holdPos = false;
         var r = card.getBoundingClientRect();
         pinnedPos = { left: Math.round(r.left), top: Math.round(r.top) };
         pin.textContent = '已固定';
         pin.classList.add('xk-on');
       } else {
+        // 取消固定只改「以后跟不跟随」，当前位置不动（原来会跳回选区）
         pinnedPos = null;
+        holdPos = true;
         pin.textContent = '固定';
         pin.classList.remove('xk-on');
-        position(lastAnchor, false);
+        pin.title = '固定在此处：新译文原地刷新，不跟随选区';
       }
     });
     head.appendChild(pin);
@@ -284,7 +316,7 @@
     if (e.button !== 0) return;
     if (e.target && e.target.tagName === 'BUTTON') return;
     var r = card.getBoundingClientRect();
-    dragState = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    dragState = { dx: e.clientX - r.left, dy: e.clientY - r.top, sx: e.clientX, sy: e.clientY, moved: false };
     e.preventDefault();
     document.addEventListener('mousemove', onDragMove, true);
     document.addEventListener('mouseup', endDrag, true);
@@ -292,21 +324,37 @@
 
   function onDragMove(e) {
     if (!dragState || !card) return;
+    if (!dragState.moved && Math.abs(e.clientX - dragState.sx) + Math.abs(e.clientY - dragState.sy) > 3) dragState.moved = true;
+    if (!dragState.moved) return;
     var w = card.offsetWidth;
     var h = card.offsetHeight;
     var vw = window.innerWidth;
     var vh = window.innerHeight;
-    var left = Math.min(Math.max(0, e.clientX - dragState.dx), vw - w);
-    var top = Math.min(Math.max(0, e.clientY - dragState.dy), vh - h);
+    var pos = clampPos(e.clientX - dragState.dx, e.clientY - dragState.dy, w, h, vw, vh);
+    var left = Math.round(pos.left);
+    var top = Math.round(pos.top);
     card.style.left = left + 'px';
     card.style.top = top + 'px';
-    if (pinned) pinnedPos = { left: left, top: top };
+    pinnedPos = { left: left, top: top };
   }
 
   function endDrag() {
+    var moved = dragState && dragState.moved;
     dragState = null;
     document.removeEventListener('mousemove', onDragMove, true);
     document.removeEventListener('mouseup', endDrag, true);
+    if (moved && card && !pinned) {
+      // 手动拖过 = 我要它在这儿：自动进入固定状态，按钮同步显示「已固定」
+      pinned = true;
+      var box = card.getBoundingClientRect();
+      pinnedPos = { left: Math.round(box.left), top: Math.round(box.top) };
+      var pinBtn = card.querySelector('.xk-pin');
+      if (pinBtn) {
+        pinBtn.textContent = '已固定';
+        pinBtn.classList.add('xk-on');
+        pinBtn.title = '取消固定（恢复跟随选区）';
+      }
+    }
   }
 
   function renderLoading(original, rect, opts) {
@@ -361,6 +409,7 @@
 
   function requestTranslate(text, rect, opts) {
     opts = opts || {};
+    holdPos = false;   // 新的一次框选：恢复「跟随选区」
     var engine = opts.engine;
     renderLoading(text, rect, opts);
     var payload = { type: 'xk-translate', text: text, target: settings.target };

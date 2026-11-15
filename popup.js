@@ -30,7 +30,9 @@ async function init() {
   $('opts').addEventListener('click', function () { chrome.runtime.openOptionsPage(); });
   $('reader').addEventListener('click', function () {
     var url = tab && tab.url ? tab.url : '';
-    var openable = /^https?:/i.test(url);
+    // 只有当前标签页确实是 PDF 才带上地址，否则开空白阅读器（拖文件进去），
+    // 不然会把网页当 PDF 打开，pdf.js 报 Invalid PDF structure。
+    var openable = isPdf && /^https?:/i.test(url);
     chrome.runtime.sendMessage({ type: 'xk-open-reader', url: openable ? url : '' }).then(function () { window.close(); });
   });
   $('panel').addEventListener('click', async function () {
