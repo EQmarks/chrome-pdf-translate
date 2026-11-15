@@ -27,6 +27,33 @@ var views = [];
 var observer = null;
 var current = 1;
 
+// —— 缩放中心：以「当前屏幕中心显示的内容」为锚点 ——
+var centerAnchor = null;   // 屏幕中心对应的内容坐标（CSS px）
+var pendingAnchor = null;  // 按钮/快捷键触发缩放前抓的锚点
+var zoomGuard = 0;         // 缩放后短暂忽略 scroll 事件，避免锚点被 Chrome 的自动滚动覆盖
+
+function currentCenter() {
+  var el = document.documentElement;
+  return { x: window.scrollX + el.clientWidth / 2, y: window.scrollY + el.clientHeight / 2 };
+}
+
+var lastClientW = 0;
+var lastClientH = 0;
+
+function updateCenterAnchor(force) {
+  var el = document.documentElement;
+  var cw = el.clientWidth, ch = el.clientHeight;
+  if (!force) {
+    if (Date.now() < zoomGuard) return;
+    // 视口尺寸变了 = 这次滚动是缩放引起的：锚点必须保留缩放前的值，
+    // 否则 Chrome 自己滚一下就把锚点带偏，缩放中心又变成左上角
+    if (lastClientH && (ch !== lastClientH || cw !== lastClientW)) return;
+  }
+  centerAnchor = { x: window.scrollX + cw / 2, y: window.scrollY + ch / 2 };
+  lastClientW = cw;
+  lastClientH = ch;
+}
+
 function updateZoomLabel() {
   $('zoomLabel').textContent = Math.round(browserZoom * 100) + '%';
 }
@@ -66,7 +93,10 @@ async function trackBrowserZoom() {
       applyBarScale();
       updateZoomLabel();
       fitMode = false;
-      if (doc) rebuildHoldView();
+      var anchor = pendingAnchor || centerAnchor;
+      pendingAnchor = null;
+      zoomGuard = Date.now() + 600;   // 这段时间内 Chrome 的自动滚动不要覆盖锚点
+      if (doc) rebuildCentered(anchor);
     });
   } catch (e) {}
 }
@@ -76,6 +106,7 @@ function stepZoom(delta) {
   var next = Math.round((browserZoom + delta) * 100) / 100;
   next = Math.max(0.25, Math.min(5, next));
   if (Math.abs(next - browserZoom) < 0.005) return;
+  pendingAnchor = currentCenter();   // 以按下去那一刻的屏幕中心为准
   try {
     chrome.tabs.setZoom(tabId, next);
   } catch (e) {}
@@ -84,6 +115,7 @@ function stepZoom(delta) {
 function init() {
   updateZoomLabel();
   bind();
+  updateCenterAnchor(true);
   trackBrowserZoom();
   if (fileParam) {
     openUrl(fileParam);
@@ -122,6 +154,7 @@ function bind() {
     if (e.key === '-') stepZoom(-0.1);
   });
   window.addEventListener('scroll', trackPage, { passive: true });
+  window.addEventListener('scroll', function () { updateCenterAnchor(false); }, { passive: true });
   window.addEventListener('resize', function () { applyBarScale(); });
 }
 
@@ -203,8 +236,8 @@ async function openBytes(buf, name) {
   setStatus('');
 }
 
-async function buildPages() {
-  await buildPagesRaw();
+async function buildPages(keepScroll) {
+  await buildPagesRaw(keepScroll);
   if (fitMode) await refineFit(2);
 }
 
@@ -220,7 +253,7 @@ async function refineFit(passes) {
   }
 }
 
-async function buildPagesRaw() {
+async function buildPagesRaw(keepScroll) {
   var container = $('pages');
   container.textContent = '';
   views = [];
@@ -248,7 +281,25 @@ async function buildPagesRaw() {
   $('pageInput').max = String(doc.numPages);
   current = 1;
   $('pageInput').value = '1';
-  window.scrollTo(0, 0);
+  if (!keepScroll) window.scrollTo(0, 0);
+}
+
+// 缩放后：把缩放前屏幕中心的那块内容，重新放回屏幕中心
+async function recenterOn(anchor) {
+  var el = document.documentElement;
+  var cw = el.clientWidth, ch = el.clientHeight;
+  var maxX = Math.max(0, el.scrollWidth - cw);
+  var maxY = Math.max(0, el.scrollHeight - ch);
+  var x = anchor ? anchor.x - cw / 2 : window.scrollX;
+  var y = anchor ? anchor.y - ch / 2 : window.scrollY;
+  window.scrollTo(Math.max(0, Math.min(x, maxX)), Math.max(0, Math.min(y, maxY)));
+  updateCenterAnchor(true);
+}
+
+async function rebuildCentered(anchor) {
+  await buildPages(true);
+  await new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); });
+  recenterOn(anchor);
 }
 
 // 保持阅读位置重建（浏览器缩放变化后重新按新分辨率渲染，画面不糊）
