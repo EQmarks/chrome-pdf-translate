@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "框选译 · PDF / 网页划词翻译",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "网页框选即译；内置 PDF 阅读器里框选即译；Chrome 原生 PDF 里可右键翻译或复制即译。",
   "minimum_chrome_version": "116",
   "permissions": [

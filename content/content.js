@@ -26,6 +26,7 @@
   var pinnedPos = null;    // 固定时的坐标
   var holdPos = false;     // 取消固定后：保持当前位置，直到下一次新的框选
   var curPos = null;       // 卡片当前实际坐标（卡片会重建，必须单独记）
+  var cardRatio = null;    // 卡片位置占视口的比例（缩放时保住屏幕位置）
   var pageZoom = 1;        // 当前标签页的 Chrome 页面缩放
   var lastAnchor = null;   // 最近一次译文的锚点，缩放变化后用来重新定位
   // 内置 PDF 阅读器页面：<html data-xk-reader="1">
@@ -135,6 +136,24 @@
 
   // 拖动/固定时的位置约束：不要求整张卡都在屏内，只要左边留 80px、
   // 标题栏留 40px 能抓回来就行（原来必须整张卡完整可见，拖起来像被吸住）
+  // 页面缩放后，按「占视口比例」重新放卡片：物理位置不变，看起来不挪动
+  function keepCardOnScreen() {
+    if (!card || !cardRatio) return;
+    var vw = window.innerWidth;
+    var vh = window.innerHeight;
+    var box = card.getBoundingClientRect();
+    var w = box.width || 400;
+    var h = box.height || 120;
+    var left = Math.round(cardRatio.x * vw);
+    var top = Math.round(cardRatio.y * vh);
+    left = Math.min(Math.max(8, left), Math.max(8, vw - w - 8));
+    top = Math.min(Math.max(8, top), Math.max(8, vh - h - 8));
+    curPos = { left: left, top: top };
+    if (pinned) pinnedPos = { left: left, top: top };
+    card.style.left = left + 'px';
+    card.style.top = top + 'px';
+  }
+
   function clampPos(left, top, w, h, vw, vh) {
     var keepX = Math.min(80, w);
     var keepY = Math.min(40, h);
@@ -145,6 +164,10 @@
 
   function setPos(left, top) {
     curPos = { left: Math.round(left), top: Math.round(top) };
+    // 记住「占视口的比例」：缩放时按它还原，卡片在屏幕上就不会挪位置
+    var vw = window.innerWidth || 1;
+    var vh = window.innerHeight || 1;
+    cardRatio = { x: curPos.left / vw, y: curPos.top / vh };
     if (card) {
       card.style.left = curPos.left + 'px';
       card.style.top = curPos.top + 'px';
@@ -181,8 +204,7 @@
       // 固定就固定：只把左边拉回屏内、保证标题栏可见，不因内容变高而上下跳
       var fixed = clampPos(pinnedPos.left, pinnedPos.top, w, h, vw, vh);
       pinnedPos = { left: Math.round(fixed.left), top: Math.round(fixed.top) };
-      card.style.left = pinnedPos.left + 'px';
-      card.style.top = pinnedPos.top + 'px';
+      setPos(pinnedPos.left, pinnedPos.top);
       if (asNew) requestAnimationFrame(function () { if (card) card.classList.add('xk-in'); });
       return;
     }
@@ -190,8 +212,7 @@
       var cur = card.getBoundingClientRect();
       if (cur.width) {
         var keep = clampPos(cur.left, cur.top, w, h, vw, vh);
-        card.style.left = Math.round(keep.left) + 'px';
-        card.style.top = Math.round(keep.top) + 'px';
+        setPos(keep.left, keep.top);
         if (asNew) requestAnimationFrame(function () { if (card) card.classList.add('xk-in'); });
         return;
       }
@@ -205,8 +226,7 @@
     if (left + w > vw - margin) left = Math.max(margin, vw - w - margin);
     if (top + h > vh - margin) top = Math.max(margin, vh - h - margin);
     if (top < margin) top = margin;
-    card.style.left = left + 'px';
-    card.style.top = top + 'px';
+    setPos(left, top);
     if (asNew) {
       requestAnimationFrame(function () {
         if (card) card.classList.add('xk-in');
@@ -525,11 +545,8 @@
         pageZoom = msg.zoom || 1;
         if (card) {
           applyCardZoom();
-          // 缩放后选区坐标全变了，优先按当前选区重新取锚点
-          var liveSel = window.getSelection();
-          var liveRect = liveSel && liveSel.toString().trim() ? selectionRect(liveSel) : null;
-          if (liveRect) lastAnchor = liveRect;
-          position(lastAnchor, false);
+          // onZoomChange 早于布局生效，等新视口尺寸出来后再按比例摆回去
+          setTimeout(keepCardOnScreen, 80);
         }
         sendResponse({ ok: true });
         return true;
