@@ -174,6 +174,35 @@
     }
   }
 
+  // 朗读用：源文本的语言 -> BCP-47
+  function langCodeOf(text, from) {
+    var f = String(from || '').toLowerCase();
+    if (f === 'en') return 'en-US';
+    if (f.indexOf('zh') === 0) return 'zh-CN';
+    if (f === 'ja') return 'ja-JP';
+    if (f === 'ko') return 'ko-KR';
+    if (f === 'de') return 'de-DE';
+    if (f === 'fr') return 'fr-FR';
+    if (f === 'ru') return 'ru-RU';
+    return /[\u4e00-\u9fff]/.test(text || '') ? 'zh-CN' : 'en-US';
+  }
+
+  function speakText(text, lang) {
+    if (!text || !window.speechSynthesis) return;
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = lang;
+    try {
+      var voices = window.speechSynthesis.getVoices() || [];
+      var prefix = lang.split('-')[0].toLowerCase();
+      for (var i = 0; i < voices.length; i++) {
+        var vl = (voices[i].lang || '').toLowerCase();
+        if (vl.indexOf(prefix) === 0) { u.voice = voices[i]; break; }
+      }
+    } catch (e) {}
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  }
+
   function applyCardZoom() {
     if (!card) return;
     var z = pageZoom || 1;
@@ -287,13 +316,10 @@
     foot.appendChild(copy);
 
     var speak = makeEl('button', 'xk-btn', '朗读');
+    speak.title = '朗读原文（按原文语言）';
     speak.addEventListener('click', function () {
-      if (!result || !result.text || !window.speechSynthesis) return;
-      var u = new SpeechSynthesisUtterance(result.text);
-      var to = result.to || '';
-      u.lang = to.indexOf('zh') === 0 ? 'zh-CN' : to === 'en' ? 'en-US' : to === 'ja' ? 'ja-JP' : 'en-US';
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(u);
+      var src = original || (result && result.text) || '';
+      speakText(src, langCodeOf(src, result && result.from));
     });
     foot.appendChild(speak);
 

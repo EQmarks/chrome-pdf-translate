@@ -131,10 +131,25 @@ function renderCurrent(cur) {
   acts.appendChild(cp);
   const sp = el('button', 'act', '朗读');
   sp.addEventListener('click', function () {
-    if (!res.text || !window.speechSynthesis) return;
-    const u = new SpeechSynthesisUtterance(res.text);
-    const to = res.to || settings.target;
-    u.lang = to.indexOf('zh') === 0 ? 'zh-CN' : to === 'en' ? 'en-US' : to === 'ja' ? 'ja-JP' : 'en-US';
+    const src = cur.text || res.text || '';
+    if (!src || !window.speechSynthesis) return;
+    const u = new SpeechSynthesisUtterance(src);
+    const f = String(res.from || '').toLowerCase();
+    u.lang = f === 'en' ? 'en-US'
+      : f.indexOf('zh') === 0 ? 'zh-CN'
+      : f === 'ja' ? 'ja-JP'
+      : f === 'ko' ? 'ko-KR'
+      : f === 'de' ? 'de-DE'
+      : f === 'fr' ? 'fr-FR'
+      : f === 'ru' ? 'ru-RU'
+      : /[\u4e00-\u9fff]/.test(src) ? 'zh-CN' : 'en-US';
+    try {
+      const voices = window.speechSynthesis.getVoices() || [];
+      const prefix = u.lang.split('-')[0].toLowerCase();
+      for (let i = 0; i < voices.length; i++) {
+        if ((voices[i].lang || '').toLowerCase().indexOf(prefix) === 0) { u.voice = voices[i]; break; }
+      }
+    } catch (e) {}
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(u);
   });
