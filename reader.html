@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN" data-xk-reader="1">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>框选译 · PDF 阅读器</title>
+<link rel="stylesheet" href="reader/pdfjs/textlayer.css">
+<link rel="stylesheet" href="reader.css">
+</head>
+<body>
+<header id="bar">
+  <div class="group left">
+    <span class="logo">框选译</span>
+    <span id="title" class="title">未打开文件</span>
+  </div>
+  <div class="group mid">
+    <button id="prevPage" title="上一页">‹</button>
+    <input id="pageInput" type="number" min="1" value="1" aria-label="页码">
+    <span class="muted">/ <span id="pageCount">-</span></span>
+    <button id="nextPage" title="下一页">›</button>
+  </div>
+  <div class="group right">
+    <button id="zoomOut" title="缩小">−</button>
+    <span id="zoomLabel" class="muted">120%</span>
+    <button id="zoomIn" title="放大">＋</button>
+    <button id="fitWidth">适应宽度</button>
+    <button id="openBtn" class="primary">打开文件</button>
+    <input id="fileInput" type="file" accept="application/pdf" hidden>
+  </div>
+</header>
+<div id="status" class="status" hidden></div>
+<main id="pages"></main>
+<div id="empty" class="empty">
+  <div class="empty-in">
+    <h1>把 PDF 拖进来</h1>
+    <p>或用右上角「打开文件」选择本地 PDF。<br>打开后在文字上框选，译文会自动弹出。</p>
+  </div>
+</div>
+<script src="content/content.js"></script>
+<script type="module" src="reader/reader.js"></script>
+</body>
+</html>

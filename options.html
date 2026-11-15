@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>框选译 · 设置</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+<main>
+  <h1>框选译 <span class="ver">v1.0.0</span></h1>
+  <p class="lead">网页框选即译；Chrome 内置 PDF 阅读器里选中文字后右键翻译，或 Ctrl+C 让译文自动出现在侧栏。</p>
+
+  <section>
+    <h2>翻译</h2>
+    <label class="row"><span>启用划词翻译</span><input type="checkbox" id="enabled"></label>
+    <label class="row"><span>普通网页上也自动翻译</span><input type="checkbox" id="webEnabled"></label>
+    <p class="note">关掉后：只有内置 PDF 阅读器里框选才会自动翻译；网页里仍可以右键「翻译选中文字」，但不会再自动弹卡。</p>
+    <label class="row"><span>网页触发方式</span>
+      <select id="mode">
+        <option value="auto">选中即译（推荐）</option>
+        <option value="ctrl">按住 Ctrl 选中才译</option>
+        <option value="off">不自动触发</option>
+      </select>
+    </label>
+    <label class="row"><span>译文语言</span><select id="target"></select></label>
+    <label class="row"><span>翻译引擎</span><select id="engine"></select></label>
+    <p class="note" id="engineNote"></p>
+    <div class="row"><span>测试当前引擎</span><button id="testBtn">翻译一句试试</button></div>
+    <pre class="testout" id="testout" hidden></pre>
+  </section>
+
+  <section>
+    <h2>PDF 专项</h2>
+    <label class="row"><span>复制即翻译（监听剪贴板）</span><input type="checkbox" id="watch"></label>
+    <label class="row"><span>所有页面都监听复制（不只 PDF）</span><input type="checkbox" id="watchAll"></label>
+    <p class="note">Chrome 内置 PDF 阅读器是独立沙箱，网页脚本进不去，所以原生 PDF 里有两种方式：① 选中 → 右键「翻译选中文字」；② 选中 → Ctrl+C，译文自动进侧栏。</p>
+    <p class="note"><b>想要像网页一样「框选即译」</b>：用内置 PDF 阅读器打开（右键 PDF 链接/页面 → 「用「框选译」阅读器打开」，或点扩展图标 → 用阅读器打开此 PDF，也可以把 PDF 直接拖进阅读器）。</p>
+    <div class="row"><span>侧栏</span><button id="openPanelBtn">打开侧栏</button></div>
+  </section>
+
+  <section>
+    <h2>怎么用</h2>
+    <ul class="guide">
+      <li><b>网页</b>：鼠标框选任意文字，译文卡片在选区下方弹出；Esc 关闭，卡片可拖动、可复制、可朗读。</li>
+      <li><b>PDF</b>：右键菜单「翻译选中文字」，或选中后 Ctrl+C，译文进入侧栏（扩展图标会亮起「译」）。</li>
+      <li><b>只想选中不翻译</b>：把触发方式改成「按住 Ctrl 才译」，或临时关掉划词翻译。</li>
+      <li><b>隐私</b>：只把你选中的文字发给翻译服务，不做任何后台采集；剪贴板监听只在本机读、只用于翻译刚复制的内容。</li>
+    </ul>
+  </section>
+
+  <section class="danger">
+    <h2>重置</h2>
+    <button id="resetBtn">恢复默认设置</button>
+  </section>
+
+  <footer>设置即时生效，无需重启浏览器。</footer>
+</main>
+<script type="module" src="options.js"></script>
+</body>
+</html>

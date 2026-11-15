@@ -1,0 +1,79 @@
+:root {
+  color-scheme: light dark;
+  --bar: #232a35;
+  --bar-fg: #e8eefb;
+  --canvas: #4a5160;
+  --accent: #2563eb;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bar: #1f2733; --canvas: #5b6270; }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+/* html 作为滚动容器并强制常驻竖向滚动条：这样 clientWidth 从第一帧起就是稳定值，
+   「适应宽度」不会在建完页、滚动条突然出现后比窗口宽十几像素。 */
+html { height: 100%; overflow-y: scroll; overflow-x: auto; scrollbar-gutter: stable; }
+body { min-height: 100%;
+/* 预留滚动条位置：否则「适应宽度」算的时候还没有竖向滚动条，
+   建完页滚动条一出现就比窗口宽十几像素，右边永远溢出一点。 */
+html { scrollbar-gutter: stable; }
+body { overflow-x: auto; overflow-y: auto; }
+body {
+  background: var(--canvas);
+  font: 13px/1.5 -apple-system, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  color: #e8eefb;
+}
+#bar {
+  position: fixed; top: 0; left: 0; right: 0; height: 44px; z-index: 50;
+  display: flex; align-items: center; gap: 10px; padding: 0 12px;
+  background: var(--bar); box-shadow: 0 1px 6px rgba(0,0,0,.35);
+}
+.group { display: flex; align-items: center; gap: 6px; }
+.left { flex: 1 1 auto; min-width: 0; }
+.mid { flex: 0 0 auto; }
+.right { flex: 0 0 auto; }
+.logo { font-weight: 700; letter-spacing: .5px; color: #93b4ff; }
+.title { color: #c9d5ea; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46vw; }
+.muted { color: #9aa7bd; font-size: 12px; }
+button {
+  font: inherit; font-size: 12.5px; color: var(--bar-fg); background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.14); border-radius: 7px; padding: 4px 10px; cursor: pointer;
+}
+button:hover { background: rgba(255,255,255,.16); }
+button.primary { background: var(--accent); border-color: var(--accent); }
+#pageInput {
+  width: 56px; font: inherit; font-size: 12.5px; text-align: center; color: var(--bar-fg);
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); border-radius: 7px; padding: 4px 6px;
+}
+#status {
+  position: fixed; top: 44px; left: 0; right: 0; z-index: 49;
+  padding: 8px 14px; background: #3a2a1a; color: #ffd9a8; font-size: 12.5px;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+}
+#pages {
+  /* max-content：内容比视口宽时宽度跟着内容走；min-width:100% 保证窄时仍撑满视口。
+     这里刻意不用 flex 居中——flex 的 align-items:center 会让超宽子元素向两侧溢出，
+     左侧溢出跑到滚动原点之外，横向滚动条拉到头也看不到左半边。 */
+  width: max-content;
+  min-width: 100%;
+  margin: 0 auto;
+  padding: 60px 24px 96px;
+}
+.page {
+  position: relative; background: #fff; box-shadow: 0 6px 22px rgba(0,0,0,.4);
+  overflow: hidden;
+  margin: 0 auto 18px;
+}
+.page canvas { display: block; width: 100%; height: 100%; }
+.empty {
+  position: fixed; inset: 44px 0 0 0; display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.empty.hidden, #empty[hidden] { display: none; }
+.empty-in {
+  text-align: center; color: #eef2f8; background: rgba(0,0,0,.28); padding: 28px 34px; border-radius: 14px;
+  border: 1px dashed rgba(255,255,255,.35);
+}
+.empty-in h1 { font-size: 20px; margin: 0 0 8px; }
+.empty-in p { margin: 0; color: #c3cddd; font-size: 13px; line-height: 1.7; }
+.dragging .empty-in { border-color: #8fb2ff; background: rgba(37,99,235,.25); }

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>框选译</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">框选译</div>
+    <div class="hint" id="hint">PDF 里选中文字后按 Ctrl+C，译文会自动出现在这里</div>
+  </header>
+
+  <section id="current" class="card empty">还没有译文。在 PDF 里选中文字按 Ctrl+C，或右键「翻译选中文字」。</section>
+
+  <section class="quick">
+    <label class="row"><span>引擎</span><select id="engine"></select></label>
+    <label class="row"><span>译为</span><select id="target"></select></label>
+    <label class="row switch"><span>复制即翻译（PDF 用）</span><input type="checkbox" id="watch"></label>
+    <div class="note" id="engine-note"></div>
+  </section>
+
+  <h2 class="sec">历史</h2>
+  <ul id="history" class="history"></ul>
+
+  <footer class="bottom">
+    <a href="#" id="opts">更多设置</a>
+    <a href="#" id="clear">清空历史</a>
+  </footer>
+
+  <script type="module" src="panel.js"></script>
+</body>
+</html>
